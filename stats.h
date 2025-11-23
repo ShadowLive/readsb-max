@@ -63,8 +63,8 @@ struct stats
   uint32_t demod_rejected_bad;
   uint32_t demod_rejected_unknown_icao;
   uint32_t demod_accepted[MODES_MAX_BITERRORS + 1];
-  uint32_t demod_preamblePhase[5];
-  uint32_t demod_bestPhase[5];
+  uint32_t demod_preamblePhase[7];  // phases 3-9
+  uint32_t demod_bestPhase[7];
   uint64_t samples_processed;
   uint64_t samples_dropped;
   uint64_t samples_lost;
