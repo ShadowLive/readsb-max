@@ -43,4 +43,20 @@ uint32_t icaoFilterTestFuzzy (uint32_t partial);
 // old entries.
 void icaoFilterExpire ();
 
+// Save the current filter contents to a file
+// Returns number of ICAOs saved, or -1 on error
+int icaoFilterSave(const char *filename);
+
+// Load ICAOs from a file into the filter
+// Returns number of ICAOs loaded, or -1 on error
+int icaoFilterLoad(const char *filename);
+
+// Get count of unique ICAOs currently in filter
+uint32_t icaoFilterCount(void);
+
+// Test with error correction: if addr not found, try 1-bit and optionally 2-bit variants
+// Returns the corrected ICAO if found, or 0 if not found
+// Sets *corrected_bits to the number of bits that were corrected (0, 1, or 2)
+uint32_t icaoFilterTestWithCorrection(uint32_t addr, int max_errors, int *corrected_bits);
+
 #endif

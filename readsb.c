@@ -364,6 +364,12 @@ static void modesInit(void) {
     // Prepare error correction tables
     modesChecksumInit(Modes.nfix_crc);
     icaoFilterInit();
+
+    // Load persistent ICAO cache if configured
+    if (Modes.icaoCacheFile) {
+        icaoFilterLoad(Modes.icaoCacheFile);
+    }
+
     modeACInit();
 
     icaoFilterAdd(Modes.show_only);
@@ -1471,6 +1477,11 @@ static void cleanup_and_exit(int code) {
     }
     ca_destroy(&Modes.aircraftActive);
 
+    // Save ICAO cache before destroying filter
+    if (Modes.icaoCacheFile) {
+        icaoFilterSave(Modes.icaoCacheFile);
+    }
+
     icaoFilterDestroy();
     quickDestroy();
 
@@ -1704,6 +1715,16 @@ static error_t parse_opt(int key, char *arg, struct argp_state *state) {
             break;
         case OptAllPhases:
             Modes.allPhases = 1;
+            break;
+        case OptIcaoCache:
+            sfree(Modes.icaoCacheFile);
+            Modes.icaoCacheFile = strdup(arg);
+            break;
+        case OptIcaoFixErrors:
+            Modes.icaoFixErrors = (int) imax(imin(strtoll(arg, NULL, 10), 2), 0);
+            break;
+        case OptIcaoSeed1bit:
+            Modes.icaoSeed1bit = 1;
             break;
         case OptNet:
             Modes.net = 1;

@@ -92,6 +92,10 @@ void display_stats(struct stats *st) {
         printf("    %u accepted with correct CRC\n", st->demod_accepted[0]);
         for (j = 1; j <= Modes.nfix_crc; ++j)
             printf("    %u accepted with %d-bit error repaired\n", st->demod_accepted[j], j);
+        if (st->demod_icao_corrected[1] || st->demod_icao_corrected[2]) {
+            printf("    %u accepted with 1-bit ICAO address corrected\n", st->demod_icao_corrected[1]);
+            printf("    %u accepted with 2-bit ICAO address corrected\n", st->demod_icao_corrected[2]);
+        }
 
         if (st->noise_power_sum > 0 && st->noise_power_count > 0) {
             printf("  %.1f dBFS noise power\n",
@@ -285,6 +289,8 @@ void add_stats(const struct stats *st1, const struct stats *st2, struct stats *t
     target->demod_preambles = st1->demod_preambles + st2->demod_preambles;
     target->demod_rejected_bad = st1->demod_rejected_bad + st2->demod_rejected_bad;
     target->demod_rejected_unknown_icao = st1->demod_rejected_unknown_icao + st2->demod_rejected_unknown_icao;
+    for (i = 0; i < 3; ++i)
+        target->demod_icao_corrected[i] = st1->demod_icao_corrected[i] + st2->demod_icao_corrected[i];
     for (i = 0; i < MODES_MAX_BITERRORS + 1; ++i)
         target->demod_accepted[i] = st1->demod_accepted[i] + st2->demod_accepted[i];
     target->demod_modeac = st1->demod_modeac + st2->demod_modeac;

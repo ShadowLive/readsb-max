@@ -818,6 +818,9 @@ struct _Modes
 
     uint32_t preambleThreshold;
     int allPhases;  // 0=conditional phase checks, 1=test all phases unconditionally (more CPU)
+    char *icaoCacheFile;  // Path to persistent ICAO cache file
+    int icaoFixErrors;    // 0=disabled, 1=1-bit correction, 2=1-2 bit correction
+    int icaoSeed1bit;     // Accept 1-bit corrected DF17 with new ICAOs to seed the filter
     uint32_t net_forward_min_messages;
     int net_output_flush_size; // Minimum Size of output data
     int writerBufSize; // Maximum Size of output data
@@ -1249,6 +1252,9 @@ enum {
     OptRaw,
     OptPreambleThreshold,
     OptAllPhases,
+    OptIcaoCache,
+    OptIcaoFixErrors,
+    OptIcaoSeed1bit,
     OptModeAc,
     OptModeAcAuto,
     OptForwardMlat,

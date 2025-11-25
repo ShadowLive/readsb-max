@@ -62,6 +62,7 @@ struct stats
   uint32_t demod_preambles;
   uint32_t demod_rejected_bad;
   uint32_t demod_rejected_unknown_icao;
+  uint32_t demod_icao_corrected[3]; // [0]=unused, [1]=1-bit, [2]=2-bit ICAO address corrections
   uint32_t demod_accepted[MODES_MAX_BITERRORS + 1];
   uint32_t demod_preamblePhase[8];  // phases 3-10
   uint32_t demod_bestPhase[8];
