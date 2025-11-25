@@ -1,6 +1,20 @@
-# Readsb
+# readsb-max
 
-This is a detached fork of https://github.com/Mictronics/readsb
+A fork of [wiedehopf/readsb](https://github.com/wiedehopf/readsb) (itself a fork of [Mictronics/readsb](https://github.com/Mictronics/readsb)) focused on **maximising message extraction** for RTL-SDR receivers on systems with available CPU headroom.
+
+The upstream readsb is optimised for low-power devices like Raspberry Pi Zero; this fork adds options that trade CPU cycles for improved message decoding.
+
+### Enhancements
+
+- **Extended phase detection (default)**: Tests 8 phases (3-10) instead of the original 5, catching more messages at phase boundaries
+- **`--all-phases`**: Unconditionally tests all phases for maximum extraction
+
+### Recommended Usage
+
+For systems with CPU to spare (desktop, server, Pi 4/5):
+```
+--all-phases --aggressive
+```
 
 It's continually under development, expect bugs, segfaults and all the good stuff :)
 
