@@ -369,7 +369,7 @@ after_pre:
         int32_t common3456 = sum_1_4 - diff_2_3 + pa[9] + pa[12];
 
         if (Modes.allPhases) {
-            // Test all 7 phases (3-9) unconditionally for maximum message extraction
+            // Test all 8 phases (3-10) unconditionally for maximum message extraction
             score_phase(3, pa, &bestmsg, &bestscore, &bestphase, &msg, msg1, msg2);
             score_phase(4, pa, &bestmsg, &bestscore, &bestphase, &msg, msg1, msg2);
             score_phase(5, pa, &bestmsg, &bestscore, &bestphase, &msg, msg1, msg2);
@@ -377,6 +377,7 @@ after_pre:
             score_phase(7, pa, &bestmsg, &bestscore, &bestphase, &msg, msg1, msg2);
             score_phase(8, pa, &bestmsg, &bestscore, &bestphase, &msg, msg1, msg2);
             score_phase(9, pa, &bestmsg, &bestscore, &bestphase, &msg, msg1, msg2);
+            score_phase(10, pa, &bestmsg, &bestscore, &bestphase, &msg, msg1, msg2);
         } else {
             // Check preamble magnitude for each phase group
             // sample#: 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0
@@ -420,6 +421,14 @@ after_pre:
             pa_mag = pa[2] + pa[4] - pa[3] + pa[10] + pa[11] + pa[12] + pa[13] - pa[9];
             if (pa_mag >= ref_level)
                 score_phase(9, pa, &bestmsg, &bestscore, &bestphase, &msg, msg1, msg2);
+
+            // phase 9/10: peaks at 2-3,5,11,13-14: phase 10
+            // Catches edge cases at sample boundaries after message skips
+            // sample#: 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0
+            // phase 9: 0/1 5\0/4\2 0 0 0 0/4\2 2/4\0 0 0 0 0 0 X0
+            pa_mag = pa[2] + pa[3] + pa[5] - pa[4] + pa[11] + pa[13] + pa[14] - pa[10] - pa[12];
+            if (pa_mag >= ref_level)
+                score_phase(10, pa, &bestmsg, &bestscore, &bestphase, &msg, msg1, msg2);
         }
 
         // no preamble detected
