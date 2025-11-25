@@ -378,37 +378,48 @@ after_pre:
             score_phase(8, pa, &bestmsg, &bestscore, &bestphase, &msg, msg1, msg2);
             score_phase(9, pa, &bestmsg, &bestscore, &bestphase, &msg, msg1, msg2);
         } else {
-            // Normal mode: check preamble magnitude for each phase group
+            // Check preamble magnitude for each phase group
+            // sample#: 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0
+            // phase 2: 3/3\1/5\0 0 0 0 1/5\0/4\2 2\0 0 0 0 0 0 X3  (not used - too early)
+            // phase 3: 2/4\0/5\1 0 0 0 0/5\1/3 3\0 0 0 0 0 0 0 X4
+            // peaks at 0-1,3,9,11: phase 3
+            pa_mag = pa[0] + pa[1] - pa[2] + pa[3] + pa[9] + pa[11] - pa[10];
+            if (pa_mag >= ref_level)
+                score_phase(3, pa, &bestmsg, &bestscore, &bestphase, &msg, msg1, msg2);
+
+            // phase 3/4: peaks at 1,3,9,11-12
             // sample#: 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0
             // phase 3: 2/4\0/5\1 0 0 0 0/5\1/3 3\0 0 0 0 0 0 X4
             // phase 4: 1/5\0/4\2 0 0 0 0/4\2 2/4\0 0 0 0 0 0 0 X0
             pa_mag = common3456 - diff_10_11;
             if (pa_mag >= ref_level) {
-                // peaks at 1,3,9,11-12: phase 3
                 score_phase(4, pa, &bestmsg, &bestscore, &bestphase, &msg, msg1, msg2);
-
-                // peaks at 1,3,9,12: phase 4
                 score_phase(5, pa, &bestmsg, &bestscore, &bestphase, &msg, msg1, msg2);
             }
 
+            // phase 5/6: peaks at 1,3-4,9-10,12
             // sample#: 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0
             // phase 5: 0/5\1/3 3\0 0 0 0/3 3\1/5\0 0 0 0 0 0 0 X1
             // phase 6: 0/4\2 2/4\0 0 0 0 2/4\0/5\1 0 0 0 0 0 0 X2
             pa_mag = common3456 + diff_10_11;
             if (pa_mag >= ref_level) {
-                // peaks at 1,3-4,9-10,12: phase 5
                 score_phase(6, pa, &bestmsg, &bestscore, &bestphase, &msg, msg1, msg2);
-
-                // peaks at 1,4,10,12: phase 6
                 score_phase(7, pa, &bestmsg, &bestscore, &bestphase, &msg, msg1, msg2);
             }
 
-            // peaks at 1-2,4,10,12: phase 7
+            // phase 7: peaks at 1-2,4,10,12
             // sample#: 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0
             // phase 7: 0/3 3\1/5\0 0 0 0 1/5\0/4\2 0 0 0 0 0 0 X3
             pa_mag = sum_1_4 + 2 * diff_2_3 + diff_10_11 + pa[12];
             if (pa_mag >= ref_level)
                 score_phase(8, pa, &bestmsg, &bestscore, &bestphase, &msg, msg1, msg2);
+
+            // phase 8: peaks at 2,4,10-11,12-13
+            // sample#: 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0
+            // phase 8: 0/2 4\0/5\1 0 0 0 0/5\1/3 3\0 0 0 0 0 0 X4
+            pa_mag = pa[2] + pa[4] - pa[3] + pa[10] + pa[11] + pa[12] + pa[13] - pa[9];
+            if (pa_mag >= ref_level)
+                score_phase(9, pa, &bestmsg, &bestscore, &bestphase, &msg, msg1, msg2);
         }
 
         // no preamble detected
