@@ -817,6 +817,7 @@ struct _Modes
     uint64_t receiver_focus;
 
     uint32_t preambleThreshold;
+    int allPhases;  // 0=normal (5 phases), 1=test all phases unconditionally
     uint32_t net_forward_min_messages;
     int net_output_flush_size; // Minimum Size of output data
     int writerBufSize; // Maximum Size of output data
@@ -1247,6 +1248,7 @@ enum {
     OptInteractiveTTL,
     OptRaw,
     OptPreambleThreshold,
+    OptAllPhases,
     OptModeAc,
     OptModeAcAuto,
     OptForwardMlat,

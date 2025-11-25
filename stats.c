@@ -113,13 +113,13 @@ void display_stats(struct stats *st) {
 
         printf("\n Phase stats");
         printf("\n ");
-        for (int i = 0; i < 5; i++) printf(" %8u", i + 3);
+        for (int i = 0; i < 7; i++) printf(" %8u", i + 3);
         printf("\n ");
-        for (int i = 0; i < 5; i++) printf(" %8u", st->demod_preamblePhase[i]);
+        for (int i = 0; i < 7; i++) printf(" %8u", st->demod_preamblePhase[i]);
         printf("\n ");
-        for (int i = 0; i < 5; i++) printf(" %8u", i + 4);
+        for (int i = 0; i < 7; i++) printf(" %8u", i + 3);
         printf("\n ");
-        for (int i = 0; i < 5; i++) printf(" %8u", st->demod_bestPhase[i]);
+        for (int i = 0; i < 7; i++) printf(" %8u", st->demod_bestPhase[i]);
         printf("\n\n");
 
     }
@@ -289,7 +289,7 @@ void add_stats(const struct stats *st1, const struct stats *st2, struct stats *t
         target->demod_accepted[i] = st1->demod_accepted[i] + st2->demod_accepted[i];
     target->demod_modeac = st1->demod_modeac + st2->demod_modeac;
 
-    for (int i = 0; i < 5; i++) {
+    for (int i = 0; i < 7; i++) {
         target->demod_preamblePhase[i] = st1->demod_preamblePhase[i] + st2->demod_preamblePhase[i];
         target->demod_bestPhase[i] = st1->demod_bestPhase[i] + st2->demod_bestPhase[i];
     }
@@ -539,9 +539,9 @@ static char * appendStatsJson(char *p, char *end, struct stats *st, const char *
         p = safe_snprintf(p, end, ",\"strong_signals\":%d", st->strong_signal_count);
 
         p = safe_snprintf(p, end, ",\n\"pre_phase_1\":[");
-        for (int i = 0; i < 5; i++) p = safe_snprintf(p, end, "%9u,", st->demod_preamblePhase[i]);
+        for (int i = 0; i < 7; i++) p = safe_snprintf(p, end, "%9u,", st->demod_preamblePhase[i]);
         p--; p = safe_snprintf(p, end, "],\"best_phase\" :[");
-        for (int i = 0; i < 5; i++) p = safe_snprintf(p, end, "%9u,", st->demod_bestPhase[i]);
+        for (int i = 0; i < 7; i++) p = safe_snprintf(p, end, "%9u,", st->demod_bestPhase[i]);
         p--; p = safe_snprintf(p, end, "]");
 
         p = safe_snprintf(p, end, "}");

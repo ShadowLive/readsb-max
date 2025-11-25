@@ -1702,6 +1702,9 @@ static error_t parse_opt(int key, char *arg, struct argp_state *state) {
         case OptPreambleThreshold:
             Modes.preambleThreshold = (uint32_t) (imax(imin(strtoll(arg, NULL, 10), PREAMBLE_THRESHOLD_MAX), PREAMBLE_THRESHOLD_MIN));
             break;
+        case OptAllPhases:
+            Modes.allPhases = 1;
+            break;
         case OptNet:
             Modes.net = 1;
             break;
