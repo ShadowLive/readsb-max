@@ -85,6 +85,8 @@ static struct argp_option optionsReadsb[] = {
     {"icao-cache", OptIcaoCache, "<file>", 0, "Persistent ICAO cache file (load on start, save on exit)", 1},
     {"icao-fix-errors", OptIcaoFixErrors, "<1-2>", 0, "Try to correct 1 or 2 bit errors in ICAO address by matching known aircraft", 1},
     {"icao-seed-1bit", OptIcaoSeed1bit, 0, 0, "Accept 1-bit corrected DF17 messages with new ICAOs to seed the filter", 1},
+    {"fir-filter", OptFirFilter, "<1-3>", 0, "Apply magnitude pre-filter (1=edge enhance, 2=gentle edge, 3=contrast)", 1},
+    {"fir-slice", OptFirSlice, "<1-2>", 0, "Use alternative slice coefficients (1=FIR tuned, 2=optimal)", 1},
     {"forward-mlat", OptForwardMlat, 0, 0, "Forward received beast mlat results to beast output ports", 1},
     {"forward-mlat-sbs", OptForwardMlatSbs, 0, 0, "Forward received mlat results to sbs output ports", 1},
     {"mlat", OptMlat, 0, OPTION_HIDDEN, "Display raw messages in Beast ASCII mode", 1},

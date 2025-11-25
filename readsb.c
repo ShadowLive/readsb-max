@@ -1726,6 +1726,12 @@ static error_t parse_opt(int key, char *arg, struct argp_state *state) {
         case OptIcaoSeed1bit:
             Modes.icaoSeed1bit = 1;
             break;
+        case OptFirFilter:
+            Modes.firFilter = (int) imax(imin(strtoll(arg, NULL, 10), 3), 0);
+            break;
+        case OptFirSlice:
+            Modes.firSlice = (int) imax(imin(strtoll(arg, NULL, 10), 2), 0);
+            break;
         case OptNet:
             Modes.net = 1;
             break;

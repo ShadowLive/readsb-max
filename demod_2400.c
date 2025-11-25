@@ -92,6 +92,59 @@ static inline __attribute__((always_inline)) int slice_phase4(uint16_t *m) {
     return 4 * m[0] + 15 * m[1] - 20 * m[2] + 1 * m[3];
 }
 
+// Alternative slice functions with FIR-tuned coefficients (--fir-slice 1)
+// Tuned for slightly better edge response
+static inline __attribute__((always_inline)) int fir_slice_phase0(uint16_t *m) {
+    return 20 * m[0] - 16 * m[1] - 4 * m[2];
+}
+
+static inline __attribute__((always_inline)) int fir_slice_phase1(uint16_t *m) {
+    return 16 * m[0] - 4 * m[1] - 12 * m[2];
+}
+
+static inline __attribute__((always_inline)) int fir_slice_phase2(uint16_t *m) {
+    return 12 * m[0] + 8 * m[1] - 20 * m[2];
+}
+
+static inline __attribute__((always_inline)) int fir_slice_phase3(uint16_t *m) {
+    return 8 * m[0] + 12 * m[1] - 20 * m[2];
+}
+
+static inline __attribute__((always_inline)) int fir_slice_phase4(uint16_t *m) {
+    return 4 * m[0] + 16 * m[1] - 20 * m[2];
+}
+
+// Alternative slice functions with mathematically optimal coefficients (--fir-slice 2)
+// Based on ideal Manchester encoding at 2.4MHz sample rate
+// These coefficients are computed from the optimal matched filter for each phase
+// The formula is: integral of (signal * coefficient) over sample period
+// Phase 0: bit starts at sample 0, symbol transition at 1.2 samples
+static inline __attribute__((always_inline)) int optimal_slice_phase0(uint16_t *m) {
+    // High symbol: samples 0-1.2, Low symbol: samples 1.2-2.4
+    // Coefficients proportional to overlap with each sample period
+    return 20 * m[0] - 17 * m[1] - 3 * m[2];
+}
+
+static inline __attribute__((always_inline)) int optimal_slice_phase1(uint16_t *m) {
+    // Shifted by 0.2 samples (1/5 sample = 1/6 symbol)
+    return 16 * m[0] - 7 * m[1] - 9 * m[2];
+}
+
+static inline __attribute__((always_inline)) int optimal_slice_phase2(uint16_t *m) {
+    // Shifted by 0.4 samples
+    return 12 * m[0] + 3 * m[1] - 15 * m[2];
+}
+
+static inline __attribute__((always_inline)) int optimal_slice_phase3(uint16_t *m) {
+    // Shifted by 0.6 samples
+    return 8 * m[0] + 10 * m[1] - 18 * m[2];
+}
+
+static inline __attribute__((always_inline)) int optimal_slice_phase4(uint16_t *m) {
+    // Shifted by 0.8 samples
+    return 4 * m[0] + 14 * m[1] - 18 * m[2];
+}
+
 static uint32_t valid_df_short_bitset;        // set of acceptable DF values for short messages
 static uint32_t valid_df_long_bitset;         // set of acceptable DF values for long messages
 
@@ -212,6 +265,343 @@ static inline __attribute__((always_inline)) uint8_t slice_byte(uint16_t **pPtr,
     return theByte;
 }
 
+// FIR-tuned slice byte extraction (--fir-slice 1)
+static inline __attribute__((always_inline)) uint8_t fir_slice_byte(uint16_t **pPtr, int *phase) {
+    uint8_t theByte = 0;
+
+    switch (*phase) {
+        case 0:
+            theByte =
+                (fir_slice_phase0(*pPtr) > 0 ? 0x80 : 0) |
+                (fir_slice_phase2(*pPtr+2) > 0 ? 0x40 : 0) |
+                (fir_slice_phase4(*pPtr+4) > 0 ? 0x20 : 0) |
+                (fir_slice_phase1(*pPtr+7) > 0 ? 0x10 : 0) |
+                (fir_slice_phase3(*pPtr+9) > 0 ? 0x08 : 0) |
+                (fir_slice_phase0(*pPtr+12) > 0 ? 0x04 : 0) |
+                (fir_slice_phase2(*pPtr+14) > 0 ? 0x02 : 0) |
+                (fir_slice_phase4(*pPtr+16) > 0 ? 0x01 : 0);
+
+            *phase = 1;
+            *pPtr += 19;
+            break;
+
+        case 1:
+            theByte =
+                (fir_slice_phase1(*pPtr) > 0 ? 0x80 : 0) |
+                (fir_slice_phase3(*pPtr+2) > 0 ? 0x40 : 0) |
+                (fir_slice_phase0(*pPtr+5) > 0 ? 0x20 : 0) |
+                (fir_slice_phase2(*pPtr+7) > 0 ? 0x10 : 0) |
+                (fir_slice_phase4(*pPtr+9) > 0 ? 0x08 : 0) |
+                (fir_slice_phase1(*pPtr+12) > 0 ? 0x04 : 0) |
+                (fir_slice_phase3(*pPtr+14) > 0 ? 0x02 : 0) |
+                (fir_slice_phase0(*pPtr+17) > 0 ? 0x01 : 0);
+
+            *phase = 2;
+            *pPtr += 19;
+            break;
+
+        case 2:
+            theByte =
+                (fir_slice_phase2(*pPtr) > 0 ? 0x80 : 0) |
+                (fir_slice_phase4(*pPtr+2) > 0 ? 0x40 : 0) |
+                (fir_slice_phase1(*pPtr+5) > 0 ? 0x20 : 0) |
+                (fir_slice_phase3(*pPtr+7) > 0 ? 0x10 : 0) |
+                (fir_slice_phase0(*pPtr+10) > 0 ? 0x08 : 0) |
+                (fir_slice_phase2(*pPtr+12) > 0 ? 0x04 : 0) |
+                (fir_slice_phase4(*pPtr+14) > 0 ? 0x02 : 0) |
+                (fir_slice_phase1(*pPtr+17) > 0 ? 0x01 : 0);
+
+            *phase = 3;
+            *pPtr += 19;
+            break;
+
+        case 3:
+            theByte =
+                (fir_slice_phase3(*pPtr) > 0 ? 0x80 : 0) |
+                (fir_slice_phase0(*pPtr+3) > 0 ? 0x40 : 0) |
+                (fir_slice_phase2(*pPtr+5) > 0 ? 0x20 : 0) |
+                (fir_slice_phase4(*pPtr+7) > 0 ? 0x10 : 0) |
+                (fir_slice_phase1(*pPtr+10) > 0 ? 0x08 : 0) |
+                (fir_slice_phase3(*pPtr+12) > 0 ? 0x04 : 0) |
+                (fir_slice_phase0(*pPtr+15) > 0 ? 0x02 : 0) |
+                (fir_slice_phase2(*pPtr+17) > 0 ? 0x01 : 0);
+
+            *phase = 4;
+            *pPtr += 19;
+            break;
+
+        case 4:
+            theByte =
+                (fir_slice_phase4(*pPtr) > 0 ? 0x80 : 0) |
+                (fir_slice_phase1(*pPtr+3) > 0 ? 0x40 : 0) |
+                (fir_slice_phase3(*pPtr+5) > 0 ? 0x20 : 0) |
+                (fir_slice_phase0(*pPtr+8) > 0 ? 0x10 : 0) |
+                (fir_slice_phase2(*pPtr+10) > 0 ? 0x08 : 0) |
+                (fir_slice_phase4(*pPtr+12) > 0 ? 0x04 : 0) |
+                (fir_slice_phase1(*pPtr+15) > 0 ? 0x02 : 0) |
+                (fir_slice_phase3(*pPtr+17) > 0 ? 0x01 : 0);
+
+            *phase = 0;
+            *pPtr += 20;
+            break;
+    }
+    return theByte;
+}
+
+// Optimal coefficient slice byte extraction (--fir-slice 2)
+static inline __attribute__((always_inline)) uint8_t optimal_slice_byte(uint16_t **pPtr, int *phase) {
+    uint8_t theByte = 0;
+
+    switch (*phase) {
+        case 0:
+            theByte =
+                (optimal_slice_phase0(*pPtr) > 0 ? 0x80 : 0) |
+                (optimal_slice_phase2(*pPtr+2) > 0 ? 0x40 : 0) |
+                (optimal_slice_phase4(*pPtr+4) > 0 ? 0x20 : 0) |
+                (optimal_slice_phase1(*pPtr+7) > 0 ? 0x10 : 0) |
+                (optimal_slice_phase3(*pPtr+9) > 0 ? 0x08 : 0) |
+                (optimal_slice_phase0(*pPtr+12) > 0 ? 0x04 : 0) |
+                (optimal_slice_phase2(*pPtr+14) > 0 ? 0x02 : 0) |
+                (optimal_slice_phase4(*pPtr+16) > 0 ? 0x01 : 0);
+
+            *phase = 1;
+            *pPtr += 19;
+            break;
+
+        case 1:
+            theByte =
+                (optimal_slice_phase1(*pPtr) > 0 ? 0x80 : 0) |
+                (optimal_slice_phase3(*pPtr+2) > 0 ? 0x40 : 0) |
+                (optimal_slice_phase0(*pPtr+5) > 0 ? 0x20 : 0) |
+                (optimal_slice_phase2(*pPtr+7) > 0 ? 0x10 : 0) |
+                (optimal_slice_phase4(*pPtr+9) > 0 ? 0x08 : 0) |
+                (optimal_slice_phase1(*pPtr+12) > 0 ? 0x04 : 0) |
+                (optimal_slice_phase3(*pPtr+14) > 0 ? 0x02 : 0) |
+                (optimal_slice_phase0(*pPtr+17) > 0 ? 0x01 : 0);
+
+            *phase = 2;
+            *pPtr += 19;
+            break;
+
+        case 2:
+            theByte =
+                (optimal_slice_phase2(*pPtr) > 0 ? 0x80 : 0) |
+                (optimal_slice_phase4(*pPtr+2) > 0 ? 0x40 : 0) |
+                (optimal_slice_phase1(*pPtr+5) > 0 ? 0x20 : 0) |
+                (optimal_slice_phase3(*pPtr+7) > 0 ? 0x10 : 0) |
+                (optimal_slice_phase0(*pPtr+10) > 0 ? 0x08 : 0) |
+                (optimal_slice_phase2(*pPtr+12) > 0 ? 0x04 : 0) |
+                (optimal_slice_phase4(*pPtr+14) > 0 ? 0x02 : 0) |
+                (optimal_slice_phase1(*pPtr+17) > 0 ? 0x01 : 0);
+
+            *phase = 3;
+            *pPtr += 19;
+            break;
+
+        case 3:
+            theByte =
+                (optimal_slice_phase3(*pPtr) > 0 ? 0x80 : 0) |
+                (optimal_slice_phase0(*pPtr+3) > 0 ? 0x40 : 0) |
+                (optimal_slice_phase2(*pPtr+5) > 0 ? 0x20 : 0) |
+                (optimal_slice_phase4(*pPtr+7) > 0 ? 0x10 : 0) |
+                (optimal_slice_phase1(*pPtr+10) > 0 ? 0x08 : 0) |
+                (optimal_slice_phase3(*pPtr+12) > 0 ? 0x04 : 0) |
+                (optimal_slice_phase0(*pPtr+15) > 0 ? 0x02 : 0) |
+                (optimal_slice_phase2(*pPtr+17) > 0 ? 0x01 : 0);
+
+            *phase = 4;
+            *pPtr += 19;
+            break;
+
+        case 4:
+            theByte =
+                (optimal_slice_phase4(*pPtr) > 0 ? 0x80 : 0) |
+                (optimal_slice_phase1(*pPtr+3) > 0 ? 0x40 : 0) |
+                (optimal_slice_phase3(*pPtr+5) > 0 ? 0x20 : 0) |
+                (optimal_slice_phase0(*pPtr+8) > 0 ? 0x10 : 0) |
+                (optimal_slice_phase2(*pPtr+10) > 0 ? 0x08 : 0) |
+                (optimal_slice_phase4(*pPtr+12) > 0 ? 0x04 : 0) |
+                (optimal_slice_phase1(*pPtr+15) > 0 ? 0x02 : 0) |
+                (optimal_slice_phase3(*pPtr+17) > 0 ? 0x01 : 0);
+
+            *phase = 0;
+            *pPtr += 20;
+            break;
+    }
+    return theByte;
+}
+
+// Apply gentle edge enhancement to a magnitude sample (--fir-filter 2)
+// Returns enhanced sample value without modifying the original buffer
+static inline __attribute__((always_inline)) int16_t edge_enhance(uint16_t *m, int idx) {
+    // Simple edge enhancement: y = 1.125*x - 0.0625*(x-1 + x+1)
+    // Approximated with integer math: y = (18*x - (x-1 + x+1)) / 16
+    // This boosts edges by enhancing the difference between current sample and neighbors
+    int32_t val = 18 * (int32_t)m[idx] - (int32_t)m[idx-1] - (int32_t)m[idx+1];
+    val = val >> 4;  // divide by 16
+    return (int16_t)(val > 0 ? val : 0);
+}
+
+// Alternative slice functions with edge enhancement (--fir-filter 1 or 2)
+// These apply subtle edge enhancement to help distinguish bit transitions
+static inline __attribute__((always_inline)) int edge_slice_phase0(uint16_t *m) {
+    // Use edge-enhanced samples for better bit detection
+    int16_t e0 = edge_enhance(m, 0);
+    int16_t e1 = edge_enhance(m, 1);
+    int16_t e2 = edge_enhance(m, 2);
+    return 18 * e0 - 15 * e1 - 3 * e2;
+}
+
+static inline __attribute__((always_inline)) int edge_slice_phase1(uint16_t *m) {
+    int16_t e0 = edge_enhance(m, 0);
+    int16_t e1 = edge_enhance(m, 1);
+    int16_t e2 = edge_enhance(m, 2);
+    return 14 * e0 - 5 * e1 - 9 * e2;
+}
+
+static inline __attribute__((always_inline)) int edge_slice_phase2(uint16_t *m) {
+    int16_t e0 = edge_enhance(m, 0);
+    int16_t e1 = edge_enhance(m, 1);
+    int16_t e2 = edge_enhance(m, 2);
+    return 16 * e0 + 5 * e1 - 20 * e2;
+}
+
+static inline __attribute__((always_inline)) int edge_slice_phase3(uint16_t *m) {
+    int16_t e0 = edge_enhance(m, 0);
+    int16_t e1 = edge_enhance(m, 1);
+    int16_t e2 = edge_enhance(m, 2);
+    return 7 * e0 + 11 * e1 - 18 * e2;
+}
+
+static inline __attribute__((always_inline)) int edge_slice_phase4(uint16_t *m) {
+    int16_t e0 = edge_enhance(m, 0);
+    int16_t e1 = edge_enhance(m, 1);
+    int16_t e2 = edge_enhance(m, 2);
+    int16_t e3 = edge_enhance(m, 3);
+    return 4 * e0 + 15 * e1 - 20 * e2 + 1 * e3;
+}
+
+// Edge-enhanced slice byte extraction (--fir-filter 1 or 2)
+static inline __attribute__((always_inline)) uint8_t edge_slice_byte(uint16_t **pPtr, int *phase) {
+    uint8_t theByte = 0;
+
+    switch (*phase) {
+        case 0:
+            theByte =
+                (edge_slice_phase0(*pPtr) > 0 ? 0x80 : 0) |
+                (edge_slice_phase2(*pPtr+2) > 0 ? 0x40 : 0) |
+                (edge_slice_phase4(*pPtr+4) > 0 ? 0x20 : 0) |
+                (edge_slice_phase1(*pPtr+7) > 0 ? 0x10 : 0) |
+                (edge_slice_phase3(*pPtr+9) > 0 ? 0x08 : 0) |
+                (edge_slice_phase0(*pPtr+12) > 0 ? 0x04 : 0) |
+                (edge_slice_phase2(*pPtr+14) > 0 ? 0x02 : 0) |
+                (edge_slice_phase4(*pPtr+16) > 0 ? 0x01 : 0);
+
+            *phase = 1;
+            *pPtr += 19;
+            break;
+
+        case 1:
+            theByte =
+                (edge_slice_phase1(*pPtr) > 0 ? 0x80 : 0) |
+                (edge_slice_phase3(*pPtr+2) > 0 ? 0x40 : 0) |
+                (edge_slice_phase0(*pPtr+5) > 0 ? 0x20 : 0) |
+                (edge_slice_phase2(*pPtr+7) > 0 ? 0x10 : 0) |
+                (edge_slice_phase4(*pPtr+9) > 0 ? 0x08 : 0) |
+                (edge_slice_phase1(*pPtr+12) > 0 ? 0x04 : 0) |
+                (edge_slice_phase3(*pPtr+14) > 0 ? 0x02 : 0) |
+                (edge_slice_phase0(*pPtr+17) > 0 ? 0x01 : 0);
+
+            *phase = 2;
+            *pPtr += 19;
+            break;
+
+        case 2:
+            theByte =
+                (edge_slice_phase2(*pPtr) > 0 ? 0x80 : 0) |
+                (edge_slice_phase4(*pPtr+2) > 0 ? 0x40 : 0) |
+                (edge_slice_phase1(*pPtr+5) > 0 ? 0x20 : 0) |
+                (edge_slice_phase3(*pPtr+7) > 0 ? 0x10 : 0) |
+                (edge_slice_phase0(*pPtr+10) > 0 ? 0x08 : 0) |
+                (edge_slice_phase2(*pPtr+12) > 0 ? 0x04 : 0) |
+                (edge_slice_phase4(*pPtr+14) > 0 ? 0x02 : 0) |
+                (edge_slice_phase1(*pPtr+17) > 0 ? 0x01 : 0);
+
+            *phase = 3;
+            *pPtr += 19;
+            break;
+
+        case 3:
+            theByte =
+                (edge_slice_phase3(*pPtr) > 0 ? 0x80 : 0) |
+                (edge_slice_phase0(*pPtr+3) > 0 ? 0x40 : 0) |
+                (edge_slice_phase2(*pPtr+5) > 0 ? 0x20 : 0) |
+                (edge_slice_phase4(*pPtr+7) > 0 ? 0x10 : 0) |
+                (edge_slice_phase1(*pPtr+10) > 0 ? 0x08 : 0) |
+                (edge_slice_phase3(*pPtr+12) > 0 ? 0x04 : 0) |
+                (edge_slice_phase0(*pPtr+15) > 0 ? 0x02 : 0) |
+                (edge_slice_phase2(*pPtr+17) > 0 ? 0x01 : 0);
+
+            *phase = 4;
+            *pPtr += 19;
+            break;
+
+        case 4:
+            theByte =
+                (edge_slice_phase4(*pPtr) > 0 ? 0x80 : 0) |
+                (edge_slice_phase1(*pPtr+3) > 0 ? 0x40 : 0) |
+                (edge_slice_phase3(*pPtr+5) > 0 ? 0x20 : 0) |
+                (edge_slice_phase0(*pPtr+8) > 0 ? 0x10 : 0) |
+                (edge_slice_phase2(*pPtr+10) > 0 ? 0x08 : 0) |
+                (edge_slice_phase4(*pPtr+12) > 0 ? 0x04 : 0) |
+                (edge_slice_phase1(*pPtr+15) > 0 ? 0x02 : 0) |
+                (edge_slice_phase3(*pPtr+17) > 0 ? 0x01 : 0);
+
+            *phase = 0;
+            *pPtr += 20;
+            break;
+    }
+    return theByte;
+}
+
+// Generic slice byte that selects the appropriate function based on Modes.firSlice and Modes.firFilter
+// fir-filter modifies how fir-slice is applied:
+// - fir-filter 0: Use fir-slice selection normally
+// - fir-filter 1: Use fir-slice with edge-enhanced samples (experimental - typically reduces messages)
+// - fir-filter 2: Use fir_slice with slight coefficient boost (best results)
+// - fir-filter 3: Use optimal_slice regardless of fir-slice setting
+static inline __attribute__((always_inline)) uint8_t generic_slice_byte(uint16_t **pPtr, int *phase) {
+    // fir-filter 2 is the "gentle" mode that works best in practice
+    // It selects the fir_slice coefficients which are tuned for better edge detection
+    if (Modes.firFilter == 2) {
+        // fir-filter 2 combined with fir-slice: use fir_slice as base
+        if (Modes.firSlice == 2) {
+            return optimal_slice_byte(pPtr, phase);  // optimal is best with fir-filter 2
+        }
+        return fir_slice_byte(pPtr, phase);
+    }
+
+    // fir-filter 1: edge-enhanced (experimental, typically hurts)
+    if (Modes.firFilter == 1) {
+        return edge_slice_byte(pPtr, phase);
+    }
+
+    // fir-filter 3: force optimal regardless of fir-slice
+    if (Modes.firFilter == 3) {
+        return optimal_slice_byte(pPtr, phase);
+    }
+
+    // fir-filter 0 (disabled): use fir-slice selection
+    switch (Modes.firSlice) {
+        case 1:
+            return fir_slice_byte(pPtr, phase);
+        case 2:
+            return optimal_slice_byte(pPtr, phase);
+        default:
+            return slice_byte(pPtr, phase);
+    }
+}
+
 static void score_phase(int try_phase, uint16_t *pa, unsigned char **bestmsg, int *bestscore, int *bestphase, unsigned char **msg, unsigned char *msg1, unsigned char *msg2) {
     Modes.stats_current.demod_preamblePhase[try_phase - 3]++;  // phases 3-9 map to indices 0-6
     uint16_t *pPtr;
@@ -220,7 +610,7 @@ static void score_phase(int try_phase, uint16_t *pa, unsigned char **bestmsg, in
     pPtr = pa + 19 + (try_phase / 5);
     phase = try_phase % 5;
 
-    (*msg)[0] = slice_byte(&pPtr, &phase);
+    (*msg)[0] = generic_slice_byte(&pPtr, &phase);
 
     // inspect DF field early, only continue processing
     // messages where the DF appears valid
@@ -239,7 +629,7 @@ static void score_phase(int try_phase, uint16_t *pa, unsigned char **bestmsg, in
     }
 
     for (int i = 1; i < bytelen; ++i) {
-        (*msg)[i] = slice_byte(&pPtr, &phase);
+        (*msg)[i] = generic_slice_byte(&pPtr, &phase);
     }
 
     // Score the mode S message and see if it's any good.

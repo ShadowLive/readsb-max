@@ -821,6 +821,8 @@ struct _Modes
     char *icaoCacheFile;  // Path to persistent ICAO cache file
     int icaoFixErrors;    // 0=disabled, 1=1-bit correction, 2=1-2 bit correction
     int icaoSeed1bit;     // Accept 1-bit corrected DF17 with new ICAOs to seed the filter
+    int firFilter;        // 0=disabled, 1-3=magnitude pre-filter type
+    int firSlice;         // 0=default, 1=FIR tuned, 2=optimal coefficients
     uint32_t net_forward_min_messages;
     int net_output_flush_size; // Minimum Size of output data
     int writerBufSize; // Maximum Size of output data
@@ -1255,6 +1257,8 @@ enum {
     OptIcaoCache,
     OptIcaoFixErrors,
     OptIcaoSeed1bit,
+    OptFirFilter,
+    OptFirSlice,
     OptModeAc,
     OptModeAcAuto,
     OptForwardMlat,
