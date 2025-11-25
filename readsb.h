@@ -818,6 +818,7 @@ struct _Modes
 
     uint32_t preambleThreshold;
     int allPhases;  // 0=conditional phase checks, 1=test all phases unconditionally (more CPU)
+    int collisionDetect;  // 0=disabled, 1=enabled - detect and recover colliding messages
     uint32_t net_forward_min_messages;
     int net_output_flush_size; // Minimum Size of output data
     int writerBufSize; // Maximum Size of output data
@@ -1377,6 +1378,7 @@ enum {
     OptSoapyBandwith,
     OptSoapyEnableAgc,
     OptSoapyGainElement,
+    OptCollisionDetect,
 };
 
 

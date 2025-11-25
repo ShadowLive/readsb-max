@@ -212,6 +212,125 @@ static inline __attribute__((always_inline)) uint8_t slice_byte(uint16_t **pPtr,
     return theByte;
 }
 
+// Check if there's a valid preamble at this position for collision detection
+// Returns 1 if preamble looks valid, 0 otherwise
+// This is more stringent than the main preamble check since we're looking
+// within a message area where there's already signal present
+static inline int check_collision_preamble(uint16_t *pa) {
+    // Quick preamble check - looking for characteristic pattern
+    // Preamble has high-low-high-low-quiet-high-low-high-low pattern
+
+    // First pulse pair should be strong
+    if (pa[1] <= pa[7]) return 0;  // First peak should be higher than quiet zone
+    if (pa[12] <= pa[14] || pa[12] <= pa[15]) return 0;  // Second pulse pair check
+
+    // The quiet zone between pulse pairs (samples 5-8) should be relatively quiet
+    int32_t pulse_strength = pa[0] + pa[1] + pa[3] + pa[9] + pa[11] + pa[12];
+    int32_t quiet_zone = pa[5] + pa[6] + pa[7] + pa[8];
+
+    // For a real preamble, pulse_strength should be much larger than quiet_zone
+    // Using a stricter threshold of 3x for collision detection
+    if (pulse_strength < quiet_zone * 3) return 0;
+
+    // Check that the peaks are actually strong (not just noise)
+    // Compare to the average of the samples
+    int32_t avg = (pa[0] + pa[1] + pa[2] + pa[3] + pa[4] + pa[5] +
+                   pa[6] + pa[7] + pa[8] + pa[9] + pa[10] + pa[11] +
+                   pa[12] + pa[13] + pa[14] + pa[15]) / 16;
+
+    // Peaks should be significantly above average
+    if (pa[1] < avg * 2 || pa[12] < avg * 2) return 0;
+
+    return 1;
+}
+
+// Attempt to decode a message at the given position
+// Returns the score if successful, -1 otherwise
+static int try_decode_collision(uint16_t *pa, uint16_t *m, struct mag_buf *mag) {
+    unsigned char msg1[MODES_LONG_MSG_BYTES], msg2[MODES_LONG_MSG_BYTES];
+    unsigned char *msg = msg1;
+    unsigned char *bestmsg = NULL;
+    int bestscore = -42;
+    int bestphase = 0;
+
+    // Calculate noise reference
+    int32_t base_noise = pa[5] + pa[8] + pa[16] + pa[17] + pa[18];
+    int32_t ref_level = base_noise * Modes.preambleThreshold;
+    ref_level >>= 5;
+
+    // Try phases 4-8 (most common)
+    for (int try_phase = 4; try_phase <= 8; try_phase++) {
+        uint16_t *pPtr = pa + 19 + (try_phase / 5);
+        int phase = try_phase % 5;
+        int bytelen;
+
+        msg[0] = slice_byte(&pPtr, &phase);
+
+        uint32_t df = ((uint8_t) msg[0]) >> 3;
+        if (valid_df_long_bitset & (1 << df)) {
+            bytelen = MODES_LONG_MSG_BYTES;
+        } else if (valid_df_short_bitset & (1 << df)) {
+            bytelen = MODES_SHORT_MSG_BYTES;
+        } else {
+            continue;  // Invalid DF
+        }
+
+        for (int i = 1; i < bytelen; ++i) {
+            msg[i] = slice_byte(&pPtr, &phase);
+        }
+
+        int score = scoreModesMessage(msg, bytelen * 8);
+        if (score > bestscore) {
+            bestmsg = msg;
+            bestscore = score;
+            bestphase = try_phase;
+            msg = (msg == msg1) ? msg2 : msg1;
+        }
+    }
+
+    if (bestscore < 0 || !bestmsg) {
+        return -1;
+    }
+
+    // Successfully decoded a colliding message!
+    int msglen = modesMessageLenByType(getbits(bestmsg, 1, 5));
+
+    struct modesMessage *mm = netGetMM(&Modes.netMessageBuffer[0]);
+
+    mm->timestamp = mag->sampleTimestamp + (pa - m) * 5 + (8 + 56) * 12 + bestphase;
+    mm->sysTimestamp = mag->sysTimestamp + receiveclock_ms_elapsed(mag->sampleTimestamp, mm->timestamp);
+    mm->score = bestscore;
+
+    memcpy(mm->msg, bestmsg, MODES_LONG_MSG_BYTES);
+    int result = decodeModesMessage(mm);
+    if (result < 0) {
+        return -1;
+    }
+
+    Modes.stats_current.demod_accepted[mm->correctedbits]++;
+    Modes.stats_current.demod_collisions_recovered++;
+
+    // Measure signal power
+    {
+        double signal_power;
+        uint64_t scaled_signal_power = 0;
+        int signal_len = msglen * 12 / 5;
+
+        for (int k = 0; k < signal_len; ++k) {
+            uint32_t mag_val = pa[19 + k];
+            scaled_signal_power += mag_val * mag_val;
+        }
+
+        signal_power = scaled_signal_power / 65535.0 / 65535.0;
+        mm->signalLevel = signal_power / signal_len;
+        Modes.stats_current.signal_power_sum += signal_power;
+        Modes.stats_current.signal_power_count += signal_len;
+    }
+
+    netUseMessage(mm);
+    return bestscore;
+}
+
 static void score_phase(int try_phase, uint16_t *pa, unsigned char **bestmsg, int *bestscore, int *bestphase, unsigned char **msg, unsigned char *msg1, unsigned char *msg2) {
     Modes.stats_current.demod_preamblePhase[try_phase - 3]++;  // phases 3-9 map to indices 0-6
     uint16_t *pPtr;
@@ -522,6 +641,31 @@ after_pre:
 
         // Pass data to the next layer
         netUseMessage(mm);
+
+        // Collision detection: Look for overlapping messages
+        // After successfully decoding a message, search within the message area
+        // for additional preambles that might indicate a colliding message
+        if (Modes.collisionDetect) {
+            // A short message is ~56 samples, long is ~112 samples (plus 16 preamble)
+            // Search within the message area for additional preambles
+            // Note: pa has been advanced, so we work backward from current position
+            // Start from a few samples into the original message to avoid detecting our own preamble
+            uint16_t *collision_start = pa - msglen * 8 / 4 + 20;  // Back to original + skip preamble
+            uint16_t *collision_end = pa - 20;  // Current position minus some margin
+
+            for (uint16_t *pc = collision_start; pc < collision_end && pc < stop - MODES_LONG_MSG_SAMPLES; pc += 4) {
+                // Quick preamble check with stricter criteria
+                if (check_collision_preamble(pc)) {
+                    Modes.stats_current.demod_collisions_detected++;
+
+                    // Try to decode the potentially colliding message
+                    if (try_decode_collision(pc, m, mag) >= 0) {
+                        // Successfully recovered a collision - move past it
+                        pc += 40;  // Skip some samples to avoid re-detecting
+                    }
+                }
+            }
+        }
     }
 
     mag->loudEvents = loudEvents;

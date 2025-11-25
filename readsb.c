@@ -1705,6 +1705,9 @@ static error_t parse_opt(int key, char *arg, struct argp_state *state) {
         case OptAllPhases:
             Modes.allPhases = 1;
             break;
+        case OptCollisionDetect:
+            Modes.collisionDetect = 1;
+            break;
         case OptNet:
             Modes.net = 1;
             break;
