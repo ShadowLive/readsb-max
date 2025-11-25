@@ -96,6 +96,8 @@ void display_stats(struct stats *st) {
             printf("    %u accepted with 1-bit ICAO address corrected\n", st->demod_icao_corrected[1]);
             printf("    %u accepted with 2-bit ICAO address corrected\n", st->demod_icao_corrected[2]);
         }
+        if (st->demod_collisions_detected > 0 || st->demod_collisions_recovered > 0)
+            printf("  %u collisions detected, %u recovered\n", st->demod_collisions_detected, st->demod_collisions_recovered);
 
         if (st->noise_power_sum > 0 && st->noise_power_count > 0) {
             printf("  %.1f dBFS noise power\n",
@@ -299,6 +301,9 @@ void add_stats(const struct stats *st1, const struct stats *st2, struct stats *t
         target->demod_preamblePhase[i] = st1->demod_preamblePhase[i] + st2->demod_preamblePhase[i];
         target->demod_bestPhase[i] = st1->demod_bestPhase[i] + st2->demod_bestPhase[i];
     }
+
+    target->demod_collisions_detected = st1->demod_collisions_detected + st2->demod_collisions_detected;
+    target->demod_collisions_recovered = st1->demod_collisions_recovered + st2->demod_collisions_recovered;
 
     target->samples_processed = st1->samples_processed + st2->samples_processed;
     target->samples_dropped = st1->samples_dropped + st2->samples_dropped;

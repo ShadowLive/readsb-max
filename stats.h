@@ -66,6 +66,8 @@ struct stats
   uint32_t demod_accepted[MODES_MAX_BITERRORS + 1];
   uint32_t demod_preamblePhase[8];  // phases 3-10
   uint32_t demod_bestPhase[8];
+  uint32_t demod_collisions_detected;   // potential collisions found
+  uint32_t demod_collisions_recovered;  // colliding messages successfully decoded
   uint64_t samples_processed;
   uint64_t samples_dropped;
   uint64_t samples_lost;

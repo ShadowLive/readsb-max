@@ -1732,6 +1732,9 @@ static error_t parse_opt(int key, char *arg, struct argp_state *state) {
         case OptFirSlice:
             Modes.firSlice = (int) imax(imin(strtoll(arg, NULL, 10), 2), 0);
             break;
+        case OptCollisionDetect:
+            Modes.collisionDetect = 1;
+            break;
         case OptNet:
             Modes.net = 1;
             break;
