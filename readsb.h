@@ -821,6 +821,7 @@ struct _Modes
     char *icaoCacheFile;  // Path to persistent ICAO cache file
     int icaoFixErrors;    // 0=disabled, 1=1-bit correction, 2=1-2 bit correction
     int icaoSeed1bit;     // Accept 1-bit corrected DF17 with new ICAOs to seed the filter
+    int icaoExtendTtl;    // Extend ICAO filter TTL 10x for file processing
     int firFilter;        // 0=disabled, 1-3=magnitude pre-filter type
     int firSlice;         // 0=default, 1=FIR tuned, 2=optimal coefficients
     int collisionDetect;  // 0=disabled, 1=enabled - detect and recover colliding messages
@@ -1258,6 +1259,7 @@ enum {
     OptIcaoCache,
     OptIcaoFixErrors,
     OptIcaoSeed1bit,
+    OptIcaoExtendTtl,
     OptFirFilter,
     OptFirSlice,
     OptModeAc,

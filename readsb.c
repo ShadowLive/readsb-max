@@ -1386,7 +1386,8 @@ static void backgroundTasks(int64_t now) {
     static int64_t next_flip = 0;
     if (now >= next_flip) {
         icaoFilterExpire();
-        next_flip = now + MODES_ICAO_FILTER_TTL;
+        int64_t ttl = Modes.icaoExtendTtl ? (MODES_ICAO_FILTER_TTL * 10) : MODES_ICAO_FILTER_TTL;
+        next_flip = now + ttl;
     }
 
     static int64_t next_every_second;
@@ -1725,6 +1726,9 @@ static error_t parse_opt(int key, char *arg, struct argp_state *state) {
             break;
         case OptIcaoSeed1bit:
             Modes.icaoSeed1bit = 1;
+            break;
+        case OptIcaoExtendTtl:
+            Modes.icaoExtendTtl = 1;
             break;
         case OptFirFilter:
             Modes.firFilter = (int) imax(imin(strtoll(arg, NULL, 10), 3), 0);
