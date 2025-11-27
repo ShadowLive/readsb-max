@@ -70,6 +70,8 @@ static struct argp_option optionsReadsb[] = {
     {"fix", OptFix, 0, 0, "Enable CRC single-bit error correction (default)", 1},
     {"no-fix", OptNoFix, 0, 0, "Disable CRC single-bit error correction", 1},
     {"no-fix-df", OptNoFixDf, 0, 0, "Disable CRC single-bit error correction on the DF type to produce more DF17 messages (disabling reduces CPU usage)", 1},
+    {"fix-crc-short", OptFixCrcShort, "<0-4>", 0, "CRC bit error correction for short (56-bit) messages (default: 4)", 1},
+    {"fix-crc-long", OptFixCrcLong, "<0-4>", 0, "CRC bit error correction for long (112-bit) messages (default: 1)", 1},
     {"metric", OptMetric, 0, 0, "Use metric units", 1},
     {"show-only", OptShowOnly, "<addr>", 0, "Show only messages by given ICAO on stdout", 1},
     {"process-only", OptProcessOnly, "<addr>", 0, "Process only messages by given ICAO", 1},

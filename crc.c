@@ -23,6 +23,10 @@
 
 #include "readsb.h"
 #include <assert.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <errno.h>
+#include <time.h>
 
 // Errorinfo for "no errors"
 static struct errorinfo NO_ERRORS;
@@ -206,9 +210,42 @@ static struct errorinfo *prepareErrorTable(int bits, int max_correct, int max_de
     base_entry.errors = 0;
     for (i = 0; i < MODES_MAX_BITERRORS; ++i)
         base_entry.bit[i] = -1;
+    base_entry.padding = 0;
 
     // ignore the first 5 bits (DF type)
-    usedsize = prepareSubtable(table, 0, maxsize, 112 - bits, 5, bits, &base_entry, 0, max_correct);
+    // Progress reporting: iterate top-level bits explicitly
+    usedsize = 0;
+    int total_bits = bits - 5;  // bits 5 to bits-1
+    time_t start_time = time(NULL);
+    time_t last_report = start_time;
+
+    for (i = 5; i < bits; ++i) {
+        // Add this bit as a 1-bit error
+        table[usedsize] = base_entry;
+        table[usedsize].syndrome = single_bit_syndrome[i + (112 - bits)];
+        table[usedsize].errors = 1;
+        table[usedsize].bit[0] = i;
+        ++usedsize;
+
+        // Recurse for multi-bit errors starting from this bit
+        usedsize = prepareSubtable(table, usedsize, maxsize, 112 - bits, i + 1, bits,
+                                    &table[usedsize - 1], 1, max_correct);
+
+        // Progress report every 5 seconds
+        time_t now = time(NULL);
+        if (now - last_report >= 5) {
+            int done = i - 5 + 1;
+            double pct = 100.0 * done / total_bits;
+            int elapsed = (int)(now - start_time);
+            double rate = (double)done / elapsed;
+            int remaining = (int)((total_bits - done) / rate);
+            fprintf(stderr, "\r  [%d-bit table] %d/%d bits (%.1f%%) | %d entries | ETA: %d:%02d    ",
+                    bits, done, total_bits, pct, usedsize, remaining / 60, remaining % 60);
+            fflush(stderr);
+            last_report = now;
+        }
+    }
+    fprintf(stderr, "\r  [%d-bit table] Complete: %d entries                              \n", bits, usedsize);
 
 #ifdef CRCDEBUG
     fprintf(stderr, "%d syndromes (expected %d).\n", usedsize, maxsize);
@@ -350,31 +387,174 @@ static struct errorinfo *prepareErrorTable(int bits, int max_correct, int max_de
 }
 
 // Precompute syndrome tables for 56- and 112-bit messages.
-void modesChecksumInit(int fixBits) {
+
+// CRC table cache directory
+#define CRC_CACHE_DIR "/var/cache/readsb"
+
+// Get cache file path for given bit error level
+static const char *getCachePath(int fixBits) {
+    static char path[256];
+    snprintf(path, sizeof(path), "%s/crc_tables_%dbit.cache", CRC_CACHE_DIR, fixBits);
+    return path;
+}
+
+// Ensure cache directory exists
+static int ensureCacheDir(void) {
+    struct stat st;
+    if (stat(CRC_CACHE_DIR, &st) == -1) {
+        if (mkdir(CRC_CACHE_DIR, 0755) == -1 && errno != EEXIST) {
+            fprintf(stderr, "Warning: Failed to create cache directory %s: %s\n",
+                    CRC_CACHE_DIR, strerror(errno));
+            return 0;
+        }
+    }
+    return 1;
+}
+
+// Save error tables to cache file
+static void saveErrorTables(const char *cache_path, int fixBits) {
+    FILE *f = fopen(cache_path, "wb");
+    if (!f) {
+        fprintf(stderr, "Warning: Failed to open cache file for writing: %s: %s\n",
+                cache_path, strerror(errno));
+        return;
+    }
+
+    // Write magic header
+    uint32_t magic = 0x43524354; // "CRCT"
+    if (fwrite(&magic, sizeof(uint32_t), 1, f) != 1) goto write_error;
+
+    // Write version (fixBits level)
+    uint32_t version = fixBits;
+    if (fwrite(&version, sizeof(uint32_t), 1, f) != 1) goto write_error;
+
+    // Write table sizes
+    if (fwrite(&bitErrorTableSize_short, sizeof(int), 1, f) != 1) goto write_error;
+    if (fwrite(&bitErrorTableSize_long, sizeof(int), 1, f) != 1) goto write_error;
+
+    // Write tables
+    if (fwrite(bitErrorTable_short, sizeof(struct errorinfo), bitErrorTableSize_short, f) != (size_t)bitErrorTableSize_short)
+        goto write_error;
+    if (fwrite(bitErrorTable_long, sizeof(struct errorinfo), bitErrorTableSize_long, f) != (size_t)bitErrorTableSize_long)
+        goto write_error;
+
+    fclose(f);
+    fprintf(stderr, "saved to cache.\n");
+    return;
+
+write_error:
+    fprintf(stderr, "\nWarning: Failed to write cache file: %s\n", strerror(errno));
+    fclose(f);
+    unlink(cache_path);
+}
+
+// Load error tables from cache file
+static int loadErrorTables(const char *cache_path, int fixBits) {
+    FILE *f = fopen(cache_path, "rb");
+    if (!f) {
+        return 0; // Cache doesn't exist, not an error
+    }
+
+    // Read and verify magic header
+    uint32_t magic;
+    if (fread(&magic, sizeof(uint32_t), 1, f) != 1 || magic != 0x43524354) {
+        fclose(f);
+        return 0;
+    }
+
+    // Read and verify version
+    uint32_t version;
+    if (fread(&version, sizeof(uint32_t), 1, f) != 1 || version != (uint32_t)fixBits) {
+        fclose(f);
+        fprintf(stderr, "Warning: Cache version mismatch (expected %d, got %u), regenerating tables.\n",
+                fixBits, version);
+        return 0;
+    }
+
+    // Read table sizes
+    int short_size, long_size;
+    if (fread(&short_size, sizeof(int), 1, f) != 1) goto read_error;
+    if (fread(&long_size, sizeof(int), 1, f) != 1) goto read_error;
+
+    // Allocate tables
+    bitErrorTable_short = cmalloc(short_size * sizeof(struct errorinfo));
+    bitErrorTable_long = cmalloc(long_size * sizeof(struct errorinfo));
+
+    // Read tables
+    if (fread(bitErrorTable_short, sizeof(struct errorinfo), short_size, f) != (size_t)short_size)
+        goto read_error;
+    if (fread(bitErrorTable_long, sizeof(struct errorinfo), long_size, f) != (size_t)long_size)
+        goto read_error;
+
+    bitErrorTableSize_short = short_size;
+    bitErrorTableSize_long = long_size;
+
+    fclose(f);
+    fprintf(stderr, "loaded from cache.\n");
+    return 1;
+
+read_error:
+    fprintf(stderr, "Warning: Failed to read cache file, regenerating tables.\n");
+    fclose(f);
+    if (bitErrorTable_short) {
+        free(bitErrorTable_short);
+        bitErrorTable_short = NULL;
+    }
+    if (bitErrorTable_long) {
+        free(bitErrorTable_long);
+        bitErrorTable_long = NULL;
+    }
+    bitErrorTableSize_short = bitErrorTableSize_long = 0;
+    return 0;
+}
+
+void modesChecksumInit(int fixBitsShort, int fixBitsLong) {
     initLookupTables();
 
-    switch (fixBits) {
-        case 0:
-            bitErrorTable_short = bitErrorTable_long = NULL;
-            bitErrorTableSize_short = bitErrorTableSize_long = 0;
-            break;
-
-        case 1:
-            // For 1 bit correction, we have 100% coverage up to 4 bit detection, so don't bother
-            // with flagging collisions there.
-            bitErrorTable_short = prepareErrorTable(MODES_SHORT_MSG_BITS, 1, 1, &bitErrorTableSize_short);
-            bitErrorTable_long = prepareErrorTable(MODES_LONG_MSG_BITS, 1, 1, &bitErrorTableSize_long);
-            break;
-
-        default:
-            // Detect out to 4 bit errors; this reduces our 2-bit coverage to about 65%.
-            // This can take a little while - tell the user.
-            fprintf(stderr, "Preparing error correction tables.. ");
-            bitErrorTable_short = prepareErrorTable(MODES_SHORT_MSG_BITS, 2, 4, &bitErrorTableSize_short);
-            bitErrorTable_long = prepareErrorTable(MODES_LONG_MSG_BITS, 2, 4, &bitErrorTableSize_long);
-            fprintf(stderr, "done.\n");
-            break;
+    // Handle special case: both are 0 (no correction)
+    if (fixBitsShort == 0 && fixBitsLong == 0) {
+        bitErrorTable_short = bitErrorTable_long = NULL;
+        bitErrorTableSize_short = bitErrorTableSize_long = 0;
+        return;
     }
+
+    // Try to load from cache first
+    ensureCacheDir();
+    int cache_key = fixBitsShort * 10 + fixBitsLong;
+    const char *cache_path = getCachePath(cache_key);
+
+    fprintf(stderr, "Preparing error correction tables (short:%d-bit, long:%d-bit).. ",
+            fixBitsShort, fixBitsLong);
+
+    if (loadErrorTables(cache_path, cache_key)) {
+        // Successfully loaded from cache
+        return;
+    }
+
+    // Cache miss or invalid, generate tables
+    fprintf(stderr, "generating.. ");
+    fflush(stderr);
+
+    // Generate short message error table
+    if (fixBitsShort > 0) {
+        bitErrorTable_short = prepareErrorTable(MODES_SHORT_MSG_BITS, fixBitsShort,
+                                                 fixBitsShort, &bitErrorTableSize_short);
+    } else {
+        bitErrorTable_short = NULL;
+        bitErrorTableSize_short = 0;
+    }
+
+    // Generate long message error table
+    if (fixBitsLong > 0) {
+        bitErrorTable_long = prepareErrorTable(MODES_LONG_MSG_BITS, fixBitsLong,
+                                                fixBitsLong, &bitErrorTableSize_long);
+    } else {
+        bitErrorTable_long = NULL;
+        bitErrorTableSize_long = 0;
+    }
+
+    // Save to cache for next time
+    saveErrorTables(cache_path, cache_key);
 }
 
 // Given an error syndrome and message length, return

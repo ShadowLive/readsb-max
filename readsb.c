@@ -180,6 +180,8 @@ static void configSetDefaults(void) {
     Modes.json_location_accuracy = 2;
     Modes.maxRange = 1852 * 450; // 450 nmi default max range
     Modes.nfix_crc = 1;
+    Modes.nfix_crc_short = 4;  // Default: 4-bit correction for 56-bit messages
+    Modes.nfix_crc_long = 1;   // Default: 1-bit correction for 112-bit messages
     Modes.biastee = 0;
     Modes.position_persistence = 4;
     Modes.tcpBuffersAuto = 1;
@@ -362,7 +364,7 @@ static void modesInit(void) {
     }
 
     // Prepare error correction tables
-    modesChecksumInit(Modes.nfix_crc);
+    modesChecksumInit(Modes.nfix_crc_short, Modes.nfix_crc_long);
     icaoFilterInit();
 
     // Load persistent ICAO cache if configured
@@ -1804,6 +1806,20 @@ static error_t parse_opt(int key, char *arg, struct argp_state *state) {
             break;
         case OptAggressive:
             Modes.nfix_crc = MODES_MAX_BITERRORS;
+            break;
+        case OptFixCrcShort:
+            Modes.nfix_crc_short = atoi(arg);
+            if (Modes.nfix_crc_short < 0 || Modes.nfix_crc_short > MODES_MAX_BITERRORS) {
+                fprintf(stderr, "fix-crc-short must be between 0 and %d\n", MODES_MAX_BITERRORS);
+                return 1;
+            }
+            break;
+        case OptFixCrcLong:
+            Modes.nfix_crc_long = atoi(arg);
+            if (Modes.nfix_crc_long < 0 || Modes.nfix_crc_long > MODES_MAX_BITERRORS) {
+                fprintf(stderr, "fix-crc-long must be between 0 and %d\n", MODES_MAX_BITERRORS);
+                return 1;
+            }
             break;
         case OptInteractive:
             Modes.interactive = 1;

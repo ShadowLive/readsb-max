@@ -27,7 +27,7 @@
 #include <stdint.h>
 
 // Global max for fixable bit erros
-#define MODES_MAX_BITERRORS 2
+#define MODES_MAX_BITERRORS 4
 
 struct errorinfo
 {
@@ -37,7 +37,7 @@ struct errorinfo
     uint16_t padding;
 };
 
-void modesChecksumInit (int fixBits);
+void modesChecksumInit (int fixBitsShort, int fixBitsLong);
 uint32_t modesChecksum (uint8_t *msg, int bitlen);
 struct errorinfo *modesChecksumDiagnose (uint32_t syndrome, int bitlen);
 void modesChecksumFix (uint8_t *msg, struct errorinfo *info);

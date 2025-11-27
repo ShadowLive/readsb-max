@@ -710,7 +710,9 @@ struct _Modes
     int64_t nextMessageRateCalc;
 
     // Configuration
-    int8_t nfix_crc; // Number of crc bit error(s) to correct
+    int8_t nfix_crc; // Number of crc bit error(s) to correct (legacy, used for --aggressive)
+    int8_t nfix_crc_short; // Number of crc bit errors to correct for short (56-bit) messages
+    int8_t nfix_crc_long; // Number of crc bit errors to correct for long (112-bit) messages
     int8_t fixDF; // fix message type single bit errors that become DF17
     int8_t check_crc; // Only display messages with good CRC
     int8_t raw; // Raw output format
@@ -1273,6 +1275,8 @@ enum {
     OptNoFix,
     OptNoFixDf,
     OptAggressive,
+    OptFixCrcShort,
+    OptFixCrcLong,
     OptMlat,
     OptAutoExit,
     OptStats,
