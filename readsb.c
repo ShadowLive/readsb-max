@@ -1732,8 +1732,24 @@ static error_t parse_opt(int key, char *arg, struct argp_state *state) {
         case OptIcaoExtendTtl:
             Modes.icaoExtendTtl = 1;
             break;
+        case OptModeSStrict:
+            Modes.modeSStrict = 1;
+            break;
+        case OptNoIcaoFixModeS:
+            Modes.noIcaoFixModeS = 1;
+            break;
+        case OptValidateIcaoCorrection:
+            Modes.validateIcaoCorrection = 1;
+            break;
         case OptFirFilter:
-            Modes.firFilter = (int) imax(imin(strtoll(arg, NULL, 10), 3), 0);
+            {
+                int val = (int) imax(imin(strtoll(arg, NULL, 10), 3), 0);
+                if (val == 1) {
+                    fprintf(stderr, "Warning: --fir-filter 1 (edge enhance) has been removed as it reduces message yield. Using default.\n");
+                    val = 0;
+                }
+                Modes.firFilter = val;
+            }
             break;
         case OptFirSlice:
             Modes.firSlice = (int) imax(imin(strtoll(arg, NULL, 10), 2), 0);
@@ -1805,7 +1821,8 @@ static error_t parse_opt(int key, char *arg, struct argp_state *state) {
             Modes.use_gnss = 1;
             break;
         case OptAggressive:
-            Modes.nfix_crc = MODES_MAX_BITERRORS;
+            // Deprecated: 4-bit CRC is now default via --fix-crc-short/long
+            // Keep option for backwards compatibility but do nothing
             break;
         case OptFixCrcShort:
             Modes.nfix_crc_short = atoi(arg);
@@ -1819,6 +1836,18 @@ static error_t parse_opt(int key, char *arg, struct argp_state *state) {
             if (Modes.nfix_crc_long < 0 || Modes.nfix_crc_long > MODES_MAX_BITERRORS) {
                 fprintf(stderr, "fix-crc-long must be between 0 and %d\n", MODES_MAX_BITERRORS);
                 return 1;
+            }
+            break;
+        case OptRssiGateMultibit:
+            {
+                double dbfs = atof(arg);
+                if (dbfs == 0) {
+                    Modes.rssiGateMultibit = 0; // Disabled
+                } else {
+                    // Convert dBFS to linear scale (0-1)
+                    // dBFS = 10 * log10(linear), so linear = 10^(dBFS/10)
+                    Modes.rssiGateMultibit = pow(10.0, dbfs / 10.0);
+                }
             }
             break;
         case OptInteractive:

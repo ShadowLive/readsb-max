@@ -713,6 +713,7 @@ struct _Modes
     int8_t nfix_crc; // Number of crc bit error(s) to correct (legacy, used for --aggressive)
     int8_t nfix_crc_short; // Number of crc bit errors to correct for short (56-bit) messages
     int8_t nfix_crc_long; // Number of crc bit errors to correct for long (112-bit) messages
+    double rssiGateMultibit; // Minimum RSSI (linear, 0-1) for multi-bit CRC correction (0 = disabled)
     int8_t fixDF; // fix message type single bit errors that become DF17
     int8_t check_crc; // Only display messages with good CRC
     int8_t raw; // Raw output format
@@ -824,6 +825,9 @@ struct _Modes
     int icaoFixErrors;    // 0=disabled, 1=1-bit correction, 2=1-2 bit correction
     int icaoSeed1bit;     // Accept 1-bit corrected DF17 with new ICAOs to seed the filter
     int icaoExtendTtl;    // Extend ICAO filter TTL 10x for file processing
+    int modeSStrict;      // 0=disabled, 1=require reliable source before accepting Mode-S
+    int noIcaoFixModeS;   // 0=disabled, 1=disable ICAO correction for Mode-S (DF0,4,5,16,20,21)
+    int validateIcaoCorrection; // 0=disabled, 1=validate ICAO-corrected Mode-S against tracked altitude/squawk
     int firFilter;        // 0=disabled, 1-3=magnitude pre-filter type
     int firSlice;         // 0=default, 1=FIR tuned, 2=optimal coefficients
     int collisionDetect;  // 0=disabled, 1=enabled - detect and recover colliding messages
@@ -1262,6 +1266,9 @@ enum {
     OptIcaoFixErrors,
     OptIcaoSeed1bit,
     OptIcaoExtendTtl,
+    OptModeSStrict,
+    OptNoIcaoFixModeS,
+    OptValidateIcaoCorrection,
     OptFirFilter,
     OptFirSlice,
     OptModeAc,
@@ -1277,6 +1284,7 @@ enum {
     OptAggressive,
     OptFixCrcShort,
     OptFixCrcLong,
+    OptRssiGateMultibit,
     OptMlat,
     OptAutoExit,
     OptStats,

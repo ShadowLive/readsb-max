@@ -2064,6 +2064,16 @@ struct aircraft *trackUpdateFromMessage(struct modesMessage *mm) {
         }
     }
 
+    // Mode-S strict mode: require recent reliable confirmation before accepting Mode-S
+    // This filters out Mode-S messages with potentially incorrect ICAO addresses
+    if (Modes.modeSStrict && !mm->address_reliable && mm->source == SOURCE_MODE_S) {
+        // Reject if aircraft hasn't been seen recently by a reliable source
+        if (now - a->seen > 60 * SECONDS) {
+            res = NULL;
+            goto exit;
+        }
+    }
+
     struct aircraft scratch;
     bool haveScratch = false;
     if (mm->cpr_valid || mm->sbs_pos_valid) {
@@ -2410,6 +2420,15 @@ struct aircraft *trackUpdateFromMessage(struct modesMessage *mm) {
                 // if we have very recent CPR / position data ...
                 // those are more reliable in an aggregation situation,
                 // ignore other airground status indication
+            // Reject AG_GROUND from Mode-S short messages if aircraft has reliable high altitude
+            // This prevents corrupted FS field from erroneously setting aircraft to ground
+            } else if (mm->airground == AG_GROUND
+                    && mm->source == SOURCE_MODE_S
+                    && (a->airground == AG_AIRBORNE || a->airground == AG_UNCERTAIN)
+                    && altBaroReliable(a)
+                    && a->baro_alt > 2000
+                    && trackDataAge(now, &a->baro_alt_valid) < 30 * SECONDS) {
+                // Reject spurious ground state - aircraft has reliable altitude > 2000 ft
             } else if (accept_data(&a->airground_valid, mm->source, mm, a, REDUCE_RARE)) {
                 focusGroundstateChange(a, mm, 1, now, mm->airground);
                 if (mm->airground != a->airground) {

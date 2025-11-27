@@ -485,41 +485,11 @@ int decodeModesMessage(struct modesMessage *mm) {
             // These message types use Address/Parity, i.e. our CRC syndrome is the sender's ICAO address.
             // We can't tell if the CRC is correct or not as we don't know the correct address.
             // Accept the message if it appears to be from a previously-seen aircraft
+            // Mode-S Address/Parity: ICAO is derived from CRC, so we can only accept exact matches
+            // from known aircraft. Hamming-distance correction is unreliable for these message types.
             mm->maybe_addr = mm->crc;
             if (icaoFilterTest(mm->crc)) {
                 mm->addr = mm->crc;
-            } else if (Modes.icaoFixErrors) {
-                // Try to find a close match with error correction
-                int icao_corrected_bits = 0;
-                uint32_t corrected_addr = icaoFilterTestWithCorrection(mm->crc, Modes.icaoFixErrors, &icao_corrected_bits);
-                if (corrected_addr) {
-                    // We found a candidate ICAO. Now verify and fix the message.
-                    // error_syndrome tells us which bits are wrong
-                    uint32_t error_syndrome = mm->crc ^ corrected_addr;
-                    struct errorinfo *ei = modesChecksumDiagnose(error_syndrome, mm->msgbits);
-                    if (ei && ei->errors == icao_corrected_bits) {
-                        // Fix the message bits
-                        modesChecksumFix(msg, ei);
-                        // Verify: recompute CRC - should now equal the correct ICAO
-                        uint32_t new_crc = modesChecksum(msg, mm->msgbits);
-                        if (new_crc == corrected_addr) {
-                            // Success! Message is now corrected and validated
-                            mm->addr = corrected_addr;
-                            mm->crc = new_crc;
-                            mm->correctedbits = ei->errors;
-                            // Track ICAO address corrections in stats
-                            Modes.stats_current.demod_icao_corrected[icao_corrected_bits]++;
-                        } else {
-                            // CRC still doesn't match - reject
-                            decode_return(-1);
-                        }
-                    } else {
-                        // Couldn't diagnose the error pattern - reject
-                        decode_return(-1);
-                    }
-                } else {
-                    decode_return(-1);
-                }
             } else {
                 decode_return(-1);
             }
@@ -616,19 +586,23 @@ int decodeModesMessage(struct modesMessage *mm) {
             // or Data Parity where the requested BDS is also xored into the top byte.
             // So not only do we not know whether the CRC is right, we also don't know if
             // the ICAO is right! Ow.
+            //
+            // DF20/21 have 56-bit MB (BDS) field which provides implicit validation:
+            // - Corrupted messages rarely produce valid BDS patterns
+            // - Altitude/squawk can be cross-validated against tracked aircraft
+            // This makes ICAO correction safer for DF20/21 than for short Mode-S (DF0/4/5/16)
 
             mm->maybe_addr = mm->crc;
-            // Try an exact match
+            // Try an exact match first
             if (icaoFilterTest(mm->crc)) {
-                // OK.
                 mm->addrtype = ADDR_MODE_S;
                 mm->source = SOURCE_MODE_S;
                 mm->addr = mm->crc;
                 break;
             }
 
-            // Try error correction if enabled
-            if (Modes.icaoFixErrors) {
+            // Try error correction for DF20/21 (safer than short Mode-S due to BDS validation)
+            if (Modes.icaoFixErrors && !Modes.noIcaoFixModeS) {
                 int icao_corrected_bits = 0;
                 uint32_t corrected_addr = icaoFilterTestWithCorrection(mm->crc, Modes.icaoFixErrors, &icao_corrected_bits);
                 if (corrected_addr) {
@@ -636,6 +610,11 @@ int decodeModesMessage(struct modesMessage *mm) {
                     uint32_t error_syndrome = mm->crc ^ corrected_addr;
                     struct errorinfo *ei = modesChecksumDiagnose(error_syndrome, mm->msgbits);
                     if (ei && ei->errors == icao_corrected_bits) {
+                        // RSSI gating: reject multi-bit corrections for weak signals
+                        // This prevents false positives from noise that happens to match a known ICAO
+                        if (Modes.rssiGateMultibit > 0 && mm->signalLevel < Modes.rssiGateMultibit && ei->errors > 1) {
+                            break; // weak signal, don't trust multi-bit correction - fall through to unknown
+                        }
                         // Fix the message bits
                         modesChecksumFix(msg, ei);
                         // Verify: recompute CRC - should now equal the correct ICAO
@@ -655,9 +634,7 @@ int decodeModesMessage(struct modesMessage *mm) {
                 }
             }
 
-            // BDS / overlay control just doesn't work out.
-
-            decode_return(-1); // no good
+            decode_return(-1); // no good - unknown aircraft
             break;
 
         default:
